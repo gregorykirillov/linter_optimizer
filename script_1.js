@@ -12,6 +12,7 @@ const deleteLine = (line) => {
   fs.writeFileSync(ignoreFile, newContent)
 }
 
+// Функция для преобразования иерархической структуры в одномерный список путей до файлов
 const flattenDirectory = (paths) => {
   return paths.map(path => {
     if (fs.statSync(path).isDirectory()) return flattenDirectory(glob.sync(`${paths}/*`))
@@ -20,6 +21,7 @@ const flattenDirectory = (paths) => {
   }).flat()
 }
 
+// Функция для корректной отработки паттернов типа *css, а также линт этого файла
 const checkIsCorrectPath = async (pattern) => {
   const isGlobalIgnore = () => pattern.slice(0, 1) === '*'
 
@@ -32,24 +34,21 @@ const checkIsCorrectPath = async (pattern) => {
   return !result.errored
 }
 
-const getPathsToDelete = async (pattern) => {
-  const pathsToDelete = new Set()
-
-  const isCorrectPath = await checkIsCorrectPath(pattern)
-  if (isCorrectPath) pathsToDelete.add(pattern)
-
-  return pathsToDelete
-}
-
+// Функция для получения файлов, которые не содержат ошибок
 const getLintCorrectFilePaths = async (foundFilesPaths, pattern, toBeDeletedPaths) => {
   if (foundFilesPaths.length === 0) {
     return [...toBeDeletedPaths, pattern]
   }
 
-  const res = await getPathsToDelete(pattern)
-  return res.values()
+  const pathsToDelete = new Set()
+
+  const isCorrectPath = await checkIsCorrectPath(pattern)
+  if (isCorrectPath) pathsToDelete.add(pattern)
+
+  return pathsToDelete.values()
 }
 
+// Функция для удаления коррелирующих путей
 const removeCorrelatedPatterns = (patternFilesMap) => {
   if (patternFilesMap.size === 0) return []
 
@@ -75,6 +74,7 @@ const removeCorrelatedPatterns = (patternFilesMap) => {
   return { clearedPatterns, correlatedPaths }
 }
 
+// Функция для модификации паттернов для glob
 const fixPattern = (pattern) => {
   const isDirectory = () => pattern.slice(-1) === '/'
   const isGlobalIgnore = () => pattern.slice(0, 1) === '*'
@@ -86,10 +86,12 @@ const fixPattern = (pattern) => {
   return newPattern
 }
 
+// Функция для получения одномерного массива с файлами согласно паттерну
 const getFilesFromPattern = (globFormatPattern) => {
   return flattenDirectory(glob.sync(globFormatPattern))
 }
 
+// Мапа, содержащая в себе данные формата паттерн:файлы
 const patternFilesMap = ignorePatterns.reduce((acc, pattern) => {
   const globFormatPattern = fixPattern(pattern)
   acc.set(pattern, getFilesFromPattern(globFormatPattern))

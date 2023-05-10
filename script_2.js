@@ -4,8 +4,9 @@ const stylelint = require('stylelint')
 
 const ignoreFilePath = '.stylelintignore'
 const ignoreFileContent = fs.readFileSync(ignoreFilePath, 'utf8')
-const ignorePatterns = ignoreFileContent.split('\r\n').filter(Boolean)
+const ignorePatterns = ignoreFileContent.split('\n').filter(Boolean)
 
+// Функция для преобразования иерархической структуры в одномерный список путей до файлов
 const flattenDirectory = (paths) => {
   return paths.map(path => {
     if (fs.statSync(path).isDirectory()) return flattenDirectory(glob.sync(`${path}/*`))
@@ -14,6 +15,7 @@ const flattenDirectory = (paths) => {
   }).flat()
 }
 
+// Получение файлов, которые нужно проверить линтом
 const filesToLint = ignorePatterns.reduce((acc, pattern) => {
   const directories = flattenDirectory(glob.sync(pattern))
   acc.push(...directories)
@@ -21,6 +23,7 @@ const filesToLint = ignorePatterns.reduce((acc, pattern) => {
   return acc
 }, [])
 
+// Функция для проверки, содержатся ли в строке css файла символы, отличные от комментариев и пробелов
 const isLineIncludesSymbols = (line) => {
   const commentRegex = /\/\*[\s\S]*?\*\//g
   const withoutComment = line.replace(commentRegex, '')
@@ -29,6 +32,9 @@ const isLineIncludesSymbols = (line) => {
   return !!trimmed.length
 }
 
+// Функция для определения первой строки селектора, расположенного на нескольких строках
+// Пробегается по файлу с текущей линии maxLineNum до самого верха, пока не найдёт
+// символы, отличные от комментария и закрывающей скобки прошлого CSS правила
 const getFirstSelectorsLine = (fileData, maxLineNum) => {
   const fileArr = fileData.split('\n')
   let targetLine = maxLineNum
@@ -58,6 +64,7 @@ const getFirstSelectorsLine = (fileData, maxLineNum) => {
   return targetLine
 }
 
+// Переменная, схлопывающая многострочные блоки кода
 const transformedFiles =
   filesToLint.reduce((acc, filePath) => {
     acc[filePath] = { fileData: '' }
@@ -89,6 +96,7 @@ Promise.all(
   .then(() => {
     const errorsToIgnore = {}
 
+    // Проходим по каждой ошибке и добавляем в массив ошибок объект формата filePath: [..., {номерСтроки, правилаДляИгнора[]}, ...]
     Object.entries(transformedFiles).forEach(([filePath, { fileData, error }]) => {
       if (!error) return
 
@@ -110,6 +118,7 @@ Promise.all(
 
     const commentsMap = {}
 
+    // Проходим по строкам с ошибками и сортируем их, чтобы корректно считать смещение строки для написания следующего правила
     for (const [filePath, errorInfo] of Object.entries(errorsToIgnore)) {
       if (!commentsMap[filePath]) commentsMap[filePath] = {}
       const sortedErrorsInfo = [...errorInfo.values()].sort((a, b) => a.line - b.line)
@@ -121,6 +130,7 @@ Promise.all(
       })
     }
 
+    // Проходим по строкам с отсортированными ошибками и вставляем правила через ,
     for (const [filePath, commentsInfo] of Object.entries(commentsMap)) {
       let wroteLinesNum = 0
       const data = transformedFiles[filePath].fileData.split('\n')
